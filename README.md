@@ -23,9 +23,9 @@ The app accepts **TSV files output from STAR alignment** containing raw gene cou
 
 Expected format:
 ```
-gene_id    count
-ENSG00000001    142
-ENSG00000002    0
+target_id  length  eff_length  est_counts  tpm  gene_name  srr_id
+ENST00000000412  62  9.6194  1.33333  0.25489	M6PR	SRR35186317
+ENST00000000442	62	9.6194	1	0.191168	ESRRA	SRR35186317
 ...
 ```
 
