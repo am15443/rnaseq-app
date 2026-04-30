@@ -1,0 +1,143 @@
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================================
+# Virtual Environments
+# ============================================================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+conda-meta/
+
+# ============================================================
+# Streamlit
+# ============================================================
+.streamlit/secrets.toml
+
+# ============================================================
+# Jupyter / IPython
+# ============================================================
+.ipynb_checkpoints
+*.ipynb
+profile_default/
+ipython_config.py
+
+# ============================================================
+# Data Files — keep gene_lists/ CSVs but ignore raw data
+# ============================================================
+
+# Raw count data (TSV uploads) — do not commit large sequencing files
+*.tsv
+*.bam
+*.sam
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bed
+*.gtf
+*.gff
+*.gff3
+
+# Ignore all CSVs globally except those in gene_lists/
+*.csv
+!gene_lists/*.csv
+!gene_lists/**/*.csv
+
+# Output/results directories
+results/
+outputs/
+figures/
+plots/
+
+# ============================================================
+# OS & Editor
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PyCharm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# ============================================================
+# Logs & Temp Files
+# ============================================================
+*.log
+*.tmp
+*.temp
+*.cache
+.cache/
+logs/
+
+# ============================================================
+# Testing & Coverage
+# ============================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+nosetests.xml
+test-results/
+
+# ============================================================
+# Packaging & Dist
+# ============================================================
+*.manifest
+*.spec
