@@ -77,7 +77,7 @@ def plot_pca_2d(
             name=group,
             text=sub.index.tolist(),
             textposition="top center",
-            textfont=dict(size=10),
+            textfont=dict(size=13, color="#111111"),
             marker=dict(size=14, color=color,
                         line=dict(width=1.5, color="white"), opacity=0.9),
         ))
@@ -88,13 +88,17 @@ def plot_pca_2d(
         yaxis_title=f"PC2 ({pct[1] if len(pct)>1 else ''})",
         legend_title="Group",
         width=width, height=height,
-        plot_bgcolor="#fafafa", paper_bgcolor="white",
-        font=dict(family="DM Sans, sans-serif", size=12),
+        plot_bgcolor="#f5f5f5", paper_bgcolor="#ffffff",
+        font=dict(family="DM Sans, sans-serif", size=15, color="#111111"),
         margin=dict(l=60, r=40, t=50, b=60),
         hovermode="closest",
     )
-    fig.update_xaxes(showgrid=True, gridcolor="#ebebeb", zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="#ebebeb", zeroline=False)
+    fig.update_xaxes(showgrid=True, gridcolor="#dddddd", zeroline=False,
+                     tickfont=dict(size=14, color="#111111"),
+                     title_font=dict(size=15, color="#111111"))
+    fig.update_yaxes(showgrid=True, gridcolor="#dddddd", zeroline=False,
+                     tickfont=dict(size=14, color="#111111"),
+                     title_font=dict(size=15, color="#111111"))
     return fig
 
 
@@ -122,7 +126,7 @@ def plot_pca_3d(
             name=group,
             text=sub.index.tolist(),
             textposition="top center",
-            textfont=dict(size=9),
+            textfont=dict(size=12, color="#111111"),
             marker=dict(size=8, color=color,
                         line=dict(width=1, color="white"), opacity=0.9),
         ))
@@ -130,14 +134,21 @@ def plot_pca_3d(
     pct = [f"{v*100:.1f}%" for v in explained]
     fig.update_layout(
         scene=dict(
-            xaxis_title=f"PC1 ({pct[0] if pct else ''})",
-            yaxis_title=f"PC2 ({pct[1] if len(pct)>1 else ''})",
-            zaxis_title=f"PC3 ({pct[2] if len(pct)>2 else ''})",
-            bgcolor="#fafafa",
+            bgcolor="#f5f5f5",
+            xaxis=dict(title=dict(text=f"PC1 ({pct[0] if pct else ''})", font=dict(size=15, color="#111111")),
+                       tickfont=dict(size=13, color="#111111"),
+                       gridcolor="#dddddd"),
+            yaxis=dict(title=dict(text=f"PC2 ({pct[1] if len(pct)>1 else ''})", font=dict(size=15, color="#111111")),
+                       tickfont=dict(size=13, color="#111111"),
+                       gridcolor="#dddddd"),
+            zaxis=dict(title=dict(text=f"PC3 ({pct[2] if len(pct)>2 else ''})", font=dict(size=15, color="#111111")),
+                       tickfont=dict(size=13, color="#111111"),
+                       gridcolor="#dddddd"),
         ),
         legend_title="Group",
         width=width, height=height,
-        font=dict(family="DM Sans, sans-serif", size=12),
+        paper_bgcolor="#ffffff",
+        font=dict(family="DM Sans, sans-serif", size=15, color="#111111"),
         margin=dict(l=0, r=0, t=40, b=0),
     )
     return fig

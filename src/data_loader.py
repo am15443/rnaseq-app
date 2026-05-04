@@ -1,15 +1,12 @@
 """
 src/data_loader.py
 ──────────────────
-Load and validate TSV files with the schema:
+Load a single combined TSV file containing all samples, with the schema:
 
     target_id | length | eff_length | est_counts | tpm | gene_name | srr_id
 
-Design decisions:
-  - est_counts and tpm are summed per gene_name across isoforms/transcripts.
-  - The filename stem is used as the sample key (e.g. "SRR123456" from SRR123456.tsv).
-  - DGE is run on rounded est_counts (raw counts).
-  - Heatmap visualisation uses tpm.
+The srr_id column distinguishes samples. After loading, the app lets the
+user assign each srr_id to a named group for DGE/PCA/heatmap analysis.
 """
 
 from __future__ import annotations
@@ -20,94 +17,121 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import streamlit as st
 
-REQUIRED_COLS = {"target_id", "length", "eff_length", "est_counts", "tpm", "gene_name", "srr_id"}
+REQUIRED_COLS = {"target_id", "est_counts", "tpm", "gene_name", "srr_id"}
 
 
-def load_tsv_files(uploaded_files) -> Dict[str, pd.DataFrame]:
+def load_combined_tsv(uploaded_file) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Parse a list of Streamlit UploadedFile objects.
+    Parse a single combined TSV containing all samples.
 
     Returns
     -------
-    { sample_key : DataFrame indexed by gene_name with columns [est_counts, tpm] }
+    gene_sample_df : MultiIndex DataFrame — rows=(gene_name, srr_id),
+                     columns=[est_counts, tpm]
+                     i.e. already aggregated transcripts → genes, per sample.
+    srr_ids        : sorted list of all unique srr_ids found in the file
     """
-    result: Dict[str, pd.DataFrame] = {}
+    with st.spinner("Reading TSV file… this may take a moment for large files."):
+        raw = uploaded_file.read().decode("utf-8")
+        df  = pd.read_csv(io.StringIO(raw), sep="\t", low_memory=False)
+        df.columns = df.columns.str.lower().str.strip()
 
-    for uf in uploaded_files:
-        key = uf.name.rsplit(".", 1)[0]          # strip extension → sample key
-        try:
-            raw = uf.read().decode("utf-8")
-            df = pd.read_csv(io.StringIO(raw), sep="\t")
-            df.columns = df.columns.str.lower().str.strip()
+    # ── Column validation ─────────────────────────────────────────────────────
+    missing = REQUIRED_COLS - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"TSV is missing required columns: {', '.join(sorted(missing))}.\n"
+            f"Found: {df.columns.tolist()}"
+        )
 
-            # ── Column validation ─────────────────────────────────────────────
-            missing = REQUIRED_COLS - set(df.columns)
-            if missing:
-                st.warning(
-                    f"⚠️ '{uf.name}' is missing required columns: "
-                    f"{', '.join(sorted(missing))}. Skipping."
-                )
-                continue
+    # ── Coerce types ──────────────────────────────────────────────────────────
+    df["est_counts"] = pd.to_numeric(df["est_counts"], errors="coerce").fillna(0.0)
+    df["tpm"]        = pd.to_numeric(df["tpm"],        errors="coerce").fillna(0.0)
+    df["gene_name"]  = df["gene_name"].astype(str).str.strip()
+    df["srr_id"]     = df["srr_id"].astype(str).str.strip()
 
-            # ── Coerce numerics ───────────────────────────────────────────────
-            df["est_counts"] = pd.to_numeric(df["est_counts"], errors="coerce").fillna(0.0)
-            df["tpm"]        = pd.to_numeric(df["tpm"],        errors="coerce").fillna(0.0)
-            df["gene_name"]  = df["gene_name"].astype(str).str.strip()
+    # ── Drop unmapped genes ───────────────────────────────────────────────────
+    bad = {"", "nan", "na", "none", "-", ".", "n/a"}
+    df  = df[~df["gene_name"].str.lower().isin(bad)]
 
-            # ── Aggregate transcripts → genes (sum) ───────────────────────────
-            gene_df = (
-                df.groupby("gene_name", sort=False)
-                .agg(est_counts=("est_counts", "sum"), tpm=("tpm", "sum"))
-            )
+    # ── Aggregate transcripts → genes, per sample ─────────────────────────────
+    gene_sample_df = (
+        df.groupby(["gene_name", "srr_id"], sort=False)
+        .agg(est_counts=("est_counts", "sum"), tpm=("tpm", "sum"))
+    )
 
-            # Remove placeholder / unmapped entries
-            bad = {"", "nan", "na", "none", "-", ".", "n/a"}
-            gene_df = gene_df[~gene_df.index.str.lower().isin(bad)]
-
-            result[key] = gene_df
-
-        except Exception as e:
-            st.warning(f"⚠️ Could not parse '{uf.name}': {e}")
-
-    return result
+    srr_ids = sorted(df["srr_id"].unique().tolist())
+    return gene_sample_df, srr_ids
 
 
 def validate_counts(
-    uploaded_files: Dict[str, pd.DataFrame],
+    gene_sample_df: pd.DataFrame,
     groups: Dict[str, List[str]],
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Build aligned gene × sample matrices from loaded data.
+    Build aligned gene × sample matrices from the loaded combined data.
+
+    Parameters
+    ----------
+    gene_sample_df : MultiIndex (gene_name, srr_id) with est_counts & tpm
+    groups         : {group_name: [srr_id, ...]}
 
     Returns
     -------
     counts_df   : (n_genes × n_samples) rounded est_counts as int  — for DGE
-    tpm_df      : (n_genes × n_samples) TPM values                 — for heatmap
-    sample_meta : DataFrame indexed by sample_key with column 'group'
+    tpm_df      : (n_genes × n_samples) TPM values                 — for PCA/heatmap
+    sample_meta : DataFrame indexed by srr_id with column 'group'
     """
-    sample_order: List[str] = []
-    meta_rows: List[dict] = []
+    # ── DEBUG ─────────────────────────────────────────────────────────────────
+    st.write("**DEBUG — groups received:**", groups)
+    matrix_srr_ids = gene_sample_df.index.get_level_values("srr_id").unique().tolist()
+    st.write("**DEBUG — srr_ids in matrix:**", sorted(matrix_srr_ids))
 
-    for group_name, samples in groups.items():
-        for s in samples:
-            if s in uploaded_files:
-                sample_order.append(s)
-                meta_rows.append({"sample": s, "group": group_name})
+    # Collect samples in group order
+    sample_order: List[str] = []
+    meta_rows: List[dict]   = []
+
+    for group_name, srr_ids in groups.items():
+        for s in srr_ids:
+            sample_order.append(s)
+            meta_rows.append({"sample": s, "group": group_name})
+
+    st.write("**DEBUG — sample_order built:**", sample_order)
 
     if not sample_order:
         raise ValueError("No samples are assigned to any group.")
 
     sample_meta = pd.DataFrame(meta_rows).set_index("sample")
 
-    counts_frames = {s: uploaded_files[s]["est_counts"].rename(s) for s in sample_order}
-    tpm_frames    = {s: uploaded_files[s]["tpm"].rename(s)        for s in sample_order}
+    # Pivot to gene × sample matrices
+    counts_df = (
+        gene_sample_df["est_counts"]
+        .unstack(level="srr_id")
+        .fillna(0)
+        .round()
+        .astype(int)
+    )
+    tpm_df = (
+        gene_sample_df["tpm"]
+        .unstack(level="srr_id")
+        .fillna(0.0)
+    )
 
-    counts_df = pd.concat(counts_frames, axis=1).fillna(0).round().astype(int)
-    tpm_df    = pd.concat(tpm_frames,    axis=1).fillna(0.0)
+    # Filter to only the selected samples, in group order
+    available = [s for s in sample_order if s in counts_df.columns]
+    missing   = [s for s in sample_order if s not in counts_df.columns]
+    if missing:
+        st.warning(f"⚠️ These srr_ids were not found in the TSV: {missing}")
+
+    counts_df = counts_df[available]
+    tpm_df    = tpm_df[available]
 
     # Drop all-zero genes
-    keep = counts_df.sum(axis=1) > 0
+    keep      = counts_df.sum(axis=1) > 0
     counts_df = counts_df.loc[keep]
     tpm_df    = tpm_df.loc[tpm_df.index.isin(counts_df.index)]
+
+    # Trim sample_meta to available samples
+    sample_meta = sample_meta.loc[available]
 
     return counts_df, tpm_df, sample_meta

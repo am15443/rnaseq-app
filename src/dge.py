@@ -1,22 +1,20 @@
 """
 src/dge.py
 ──────────
-Differential Gene Expression for all group pairs.
-
-Uses pydeseq2 when installed; otherwise falls back to a
-log-normalised Welch t-test + Benjamini–Hochberg FDR.
-
-Input: rounded est_counts (integers) from the kallisto TSVs.
+Differential Gene Expression for all group pairs using pydeseq2.
+Falls back to log-normalised Welch t-test + BH FDR if pydeseq2 unavailable.
 """
 
 from __future__ import annotations
 
 import itertools
+import traceback
 import warnings
 from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
@@ -38,7 +36,8 @@ def run_dge_all_pairs(
     Parameters
     ----------
     counts_df   : genes × samples, integer est_counts
-    sample_meta : indexed by sample, column 'group'
+                  columns = sample ids, index = gene names
+    sample_meta : indexed by sample id, column 'group'
 
     Returns
     -------
@@ -52,26 +51,41 @@ def run_dge_all_pairs(
 
     for g1, g2 in pairs:
         try:
-            df = (_run_pydeseq2 if _HAS_PYDESEQ2 else _run_fallback)(
-                counts_df, sample_meta, g1, g2
-            )
+            if _HAS_PYDESEQ2:
+                df = _run_pydeseq2(counts_df, sample_meta, g1, g2)
+            else:
+                df = _run_fallback(counts_df, sample_meta, g1, g2)
             results[(g1, g2)] = df
         except Exception as e:
-            warnings.warn(f"DGE failed for {g1} vs {g2}: {e}")
+            st.error(f"DGE failed for {g1} vs {g2}: {e}")
+            st.code(traceback.format_exc())
 
     return results
 
 
-# ── pydeseq2 backend ──────────────────────────────────────────────────────────
-
 def _run_pydeseq2(counts_df, sample_meta, g1, g2):
-    mask      = sample_meta["group"].isin([g1, g2])
-    sub_meta  = sample_meta.loc[mask].copy()
+    # ── Subset to the two groups ──────────────────────────────────────────────
+    mask     = sample_meta["group"].isin([g1, g2])
+    sub_meta = sample_meta.loc[mask].copy()
+
+    # sub_counts: samples × genes  (pydeseq2 expects samples as rows)
     sub_counts = counts_df.loc[:, sub_meta.index].T.astype(int)
+
+    # ── Both indices must be identical strings ────────────────────────────────
+    # Reset both to a clean shared integer-based string index
+    shared_index = [f"s{i}" for i in range(len(sub_meta))]
+
+    sub_counts = sub_counts.copy()
+    sub_counts.index = shared_index
+
+    meta_df = pd.DataFrame({
+        "sample": shared_index,
+        "group":  sub_meta["group"].values,
+    }).set_index("sample")
 
     dds = DeseqDataSet(
         counts=sub_counts,
-        metadata=sub_meta.reset_index(),
+        metadata=meta_df,
         design_factors="group",
         ref_level=["group", g2],
         refit_cooks=True,
@@ -87,18 +101,14 @@ def _run_pydeseq2(counts_df, sample_meta, g1, g2):
     return res[["baseMean", "log2FoldChange", "pvalue", "padj"]].dropna(subset=["padj"])
 
 
-# ── Fallback: log-norm t-test + BH FDR ───────────────────────────────────────
-
 def _run_fallback(counts_df, sample_meta, g1, g2):
     """
-    1. Library-size normalise (median-of-ratios approximation).
-    2. log2(norm + 1) transform.
-    3. Welch t-test per gene.
-    4. Benjamini–Hochberg FDR.
+    Library-size normalised log2 t-test + Benjamini-Hochberg FDR.
+    Used when pydeseq2 is not installed.
     """
-    mask      = sample_meta["group"].isin([g1, g2])
-    sub_meta  = sample_meta.loc[mask]
-    sub       = counts_df.loc[:, sub_meta.index].astype(float)
+    mask     = sample_meta["group"].isin([g1, g2])
+    sub_meta = sample_meta.loc[mask]
+    sub      = counts_df.loc[:, sub_meta.index].astype(float)
 
     lib_sizes = sub.sum(axis=0)
     scale     = lib_sizes / lib_sizes.median().clip(min=1)
@@ -121,9 +131,9 @@ def _run_fallback(counts_df, sample_meta, g1, g2):
             p = np.nan
         pvals.append(p)
 
-    pvals_arr  = np.array(pvals)
-    finite     = np.isfinite(pvals_arr)
-    padj       = np.full_like(pvals_arr, np.nan)
+    pvals_arr = np.array(pvals)
+    finite    = np.isfinite(pvals_arr)
+    padj      = np.full_like(pvals_arr, np.nan)
     if finite.sum() > 0:
         _, padj_fin, _, _ = multipletests(pvals_arr[finite], method="fdr_bh")
         padj[finite] = padj_fin
