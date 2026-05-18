@@ -6,30 +6,36 @@ A user-friendly Streamlit application for RNA sequencing analysis and publicatio
 
 ## Overview
 
-This app is designed for bench scientists and bioinformaticians who want to perform differential gene expression analysis and generate high-quality visualizations from STAR-aligned count data without writing a single line of code.
+This app is designed for bench scientists and bioinformaticians who want to perform differential gene expression analysis and generate high-quality visualizations from quantified RNA-seq count data without writing a single line of code.
 
 **Key Features:**
-- Upload and organize STAR-aligned TSV count files into named sample groups
-- Differential Gene Expression (DGE) analysis between all group pairs
-- Interactive Volcano Plots for each pairwise comparison
-- 2D and 3D PCA plots with customizable group colors
-- Gene list-driven Heatmaps with drag-and-drop gene reordering
+- Upload a single combined TSV containing all samples — the app reads the `srr_id` column to identify samples automatically
+- Assign samples to named, color-coded groups through a point-and-click interface
+- Differential Gene Expression (DGE) analysis between every pair of groups using DESeq2
+- Interactive Volcano Plots with customizable colors and square dimensions
+- 2D and 3D PCA plots with per-group hex color customization
+- Gene list-driven Heatmaps with step-by-step gene reordering
+- GO Term Enrichment analysis via the Enrichr API (bar chart and dot plot)
+- Export any plot as a high-resolution PNG or SVG
 
 ---
 
 ## Input Data Format
 
-The app accepts **TSV files output from STAR alignment** containing raw gene count data. Each TSV file should represent a single sample.
+The app accepts a **single combined TSV file** containing all samples. Each row is one transcript or gene entry. The file can have any number of columns — only these four are required:
 
-Expected format:
-```
-target_id  length  eff_length  est_counts  tpm  gene_name  srr_id
-ENST00000000412  62  9.6194  1.33333  0.25489	M6PR	SRR35186317
-ENST00000000442	62	9.6194	1	0.191168	ESRRA	SRR35186317
-...
-```
+| Column | Description |
+|---|---|
+| `est_counts` | Estimated raw counts (used for DGE) |
+| `tpm` | Transcripts per million (used for PCA and heatmap) |
+| `gene_name` | Gene symbol (e.g. `ACTB`, `IL6`) |
+| `srr_id` | Sample identifier — distinguishes samples within the file |
 
-> **Note:** Gene symbol columns (e.g., `gene_name`) are supported alongside Ensembl IDs. The app will attempt to detect the appropriate identifier column automatically.
+All other columns (e.g. `target_id`, `length`, `eff_length`) are ignored automatically.
+
+If multiple rows share the same `gene_name` and `srr_id` (i.e. multiple transcripts per gene), `est_counts` and `tpm` are summed to produce gene-level values.
+
+This format is compatible with kallisto output that has been post-processed to add a `gene_name` and `srr_id` column, as well as any other quantification tool that can produce this schema.
 
 ---
 
@@ -40,12 +46,23 @@ ENST00000000442	62	9.6194	1	0.191168	ESRRA	SRR35186317
 **Prerequisites:** Python 3.9+
 
 ```bash
-git clone https://github.com/your-org/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/am15443/rnaseq-app.git
+cd rnaseq-app
 pip install -r requirements.txt
 ```
 
-### 2. Run the App
+### 2. Configure Upload Limit
+
+For large TSV files (>200MB), increase Streamlit's default upload limit by creating `.streamlit/config.toml`:
+
+```toml
+[server]
+maxUploadSize = 2000
+```
+
+This is already included in the repository.
+
+### 3. Run the App
 
 ```bash
 streamlit run app.py
@@ -57,54 +74,89 @@ The app will open in your browser at `http://localhost:8501`.
 
 ## Usage Guide
 
-### Step 1 — Upload Count Files
+### Step 1 — Upload Combined TSV
 
-Use the file uploader to upload one or more STAR-aligned `.tsv` count files. You can upload files from multiple experiments or conditions at once.
+Upload your single combined TSV file using the file uploader in the sidebar. The app will automatically detect all unique `srr_id` values and display them as available samples.
 
 ### Step 2 — Create Sample Groups
 
 - Click **"Add Group"** to create a new group
-- Give each group a descriptive name (e.g., `Control`, `Treatment_24h`)
-- Assign each uploaded TSV file to the appropriate group using the dropdown menus
+- Give each group a descriptive name (e.g. `Control`, `Treatment`)
+- Pick a color using the color picker — this color is shared across PCA, heatmap annotation bar, and serves as the default for volcano plots
+- Use the dropdown to assign `srr_id` values to each group
 - Create as many groups as needed — there is no limit
+- The **Samples tab** shows a table of all detected samples and their current group assignments
 
-### Step 3 — Run Analysis & Generate Plots
+### Step 3 — Run DGE Analysis
 
-Once your groups are defined, navigate to the analysis tabs:
+Click **"Run DGE Analysis"** in the sidebar. DGE is computed between every pair of groups automatically. For example, groups A, B, and C will produce comparisons A vs B, A vs C, and B vs C.
 
-#### Differential Gene Expression (DGE)
-- DGE is automatically computed between **every pair of groups**
-- For example, if you define groups A, B, and C, the app will run: A vs B, A vs C, and B vs C
-- Results include log2 fold change, p-value, and adjusted p-value (FDR)
-- Results tables are downloadable as CSV
+Once complete, all analysis tabs become available.
 
-#### Volcano Plots
-- One volcano plot is generated per group pair
-- Each plot is labeled at the top left and top right to indicate which group's genes appear on each side
-- Significance thresholds (p-value, log2FC) are adjustable
+---
 
-#### PCA
-- Each TSV file is represented as a single point
-- Points are colored by group
-- **Group colors are interactively customizable** using a color picker in the sidebar
-- Both **2D and 3D PCA** plots are generated
-- Plot dimensions (width/height) can be adjusted
+## Analysis Tabs
 
-#### Heatmaps
-- Place gene list CSV files in the `gene_lists/` folder (see below)
-- Select one or more gene lists from the dropdown — overlapping genes are automatically deduplicated
-- Manually add additional genes by typing comma-separated gene names (case-insensitive) into the input box
-- **Drag and drop genes** to reorder them along the Y axis
+### 📊 DGE Results
+
+- One results table per pairwise comparison
+- Columns: gene, baseMean, log2FoldChange, pvalue, padj
+- Summary metrics shown: total genes tested, significant genes (padj < 0.05), upregulated count
+- Download results as CSV per comparison
+
+### 🌋 Volcano Plots
+
+- One square volcano plot per group pair
+- X axis: log₂ fold change — positive = higher in group 1
+- Y axis: −log₁₀(adjusted p-value)
+- Group names labeled at top-left and top-right corners
+- Adjustable log₂FC and padj significance thresholds
+- **Per-comparison hex color inputs** — override the default group colors with any hex code
+- Export each plot as PNG or SVG
+
+### 🔵 PCA
+
+- One point per sample, colored by group
+- **Per-group hex color inputs** above the plots — override sidebar colors with any hex code
+- Both **2D and 3D PCA** generated from log₂(TPM + 1) values
+- Adjustable plot width and height
+- Export each plot as PNG or SVG
+
+### 🔥 Heatmap
+
+- Select genes from one or more **gene list CSVs** placed in the `gene_lists/` folder
+- Add additional genes manually by typing comma-separated names (case-insensitive)
+- **Gene reordering UI** — select any gene from the dropdown and move it up, down, or to the top; the current order is shown in a numbered list before generating
 - Heatmap layout:
-  - **Y axis:** Genes
-  - **X axis:** Individual samples (one column per TSV file)
-  - A **colored group label bar** sits below the X axis, spanning all samples within each group, colored to match the PCA group colors
+  - Y axis: genes (in your specified order)
+  - X axis: individual samples (one column per srr_id), ordered by group
+  - Colored annotation bar below X axis — one color per group, matching PCA colors
+- Values shown as Z-scored log₂(TPM + 1)
+- Hover tooltip shows gene, sample, group, raw TPM, and Z-score
+- Export as PNG or SVG
+
+### 🧬 GO Enrichment
+
+- Select a pairwise comparison and gene direction (up in group 1, up in group 2, or all significant)
+- Adjust log₂FC and padj thresholds independently
+- Choose a gene set library:
+  - GO Biological Process
+  - GO Molecular Function
+  - GO Cellular Component
+  - KEGG Pathways
+  - Reactome
+  - MSigDB Hallmarks
+- Choose **Bar chart** or **Dot plot** visualization
+- Override plot color with any hex code
+- Results queried live from the **Enrichr API** via `gseapy` — no local annotation files needed
+- Download enrichment results as CSV
+- Export plot as PNG or SVG
 
 ---
 
 ## Gene List CSVs
 
-To use the heatmap gene list feature, place CSV files in the `gene_lists/` directory at the root of the project. Each CSV should have at least one column containing gene names or symbols.
+Place CSV files in the `gene_lists/` directory at the root of the project. Each CSV should have at least one column containing gene names or symbols. The column header can be anything — the app reads the first column.
 
 ```
 gene_lists/
@@ -113,52 +165,54 @@ gene_lists/
 └── custom_pathway.csv
 ```
 
-Expected format (the column header can be anything):
+Example format:
 ```
 gene_name
 IL6
 TNF
 CXCL10
-...
 ```
 
-The app will automatically detect all CSVs in this folder and display them in the dropdown menu by filename.
+The app detects all CSVs in this folder automatically and lists them by filename in the heatmap dropdown. If the same gene appears in multiple selected CSVs it is deduplicated.
 
 ---
 
 ## Project Structure
 
 ```
-.
-├── app.py                  # Main Streamlit application entry point
-├── requirements.txt        # Python dependencies
-├── gene_lists/             # Place gene list CSVs here
-│   └── example_genes.csv
-├── src/
-│   ├── data_loader.py      # TSV parsing and validation
-│   ├── dge.py              # Differential gene expression logic
-│   ├── pca.py              # PCA computation and plotting
-│   ├── volcano.py          # Volcano plot generation
-│   └── heatmap.py          # Heatmap generation and interaction
-└── tests/
-    └── ...
+rnaseq-app/
+├── app.py                   # Main Streamlit application entry point
+├── requirements.txt         # Python dependencies
+├── .streamlit/
+│   └── config.toml          # Upload size and server config
+├── gene_lists/              # Place gene list CSVs here
+│   └── .gitkeep
+└── src/
+    ├── __init__.py
+    ├── data_loader.py       # TSV parsing, column validation, matrix building
+    ├── dge.py               # DESeq2-based DGE (pydeseq2) with t-test fallback
+    ├── pca.py               # PCA computation and 2D/3D Plotly figures
+    ├── volcano.py           # Volcano plot generation
+    ├── heatmap.py           # Heatmap with group annotation bar
+    └── go_enrichment.py     # GO enrichment via Enrichr API (gseapy)
 ```
 
 ---
 
 ## Dependencies
 
-Key packages used (see `requirements.txt` for full list):
-
 | Package | Purpose |
 |---|---|
 | `streamlit` | Web app framework |
 | `pandas` | Data loading and manipulation |
 | `numpy` | Numerical computation |
-| `pydeseq2` | Differential gene expression (DESeq2-based) |
-| `plotly` | Interactive volcano, PCA, and heatmap plots |
+| `pydeseq2` | DESeq2-based differential gene expression |
+| `plotly` | Interactive volcano, PCA, heatmap, and GO plots |
 | `scikit-learn` | PCA computation |
-| `scipy` | Statistical testing |
+| `scipy` | Statistical testing (fallback DGE) |
+| `statsmodels` | Benjamini-Hochberg FDR correction |
+| `gseapy` | GO enrichment via Enrichr API |
+| `kaleido` | PNG and SVG export for Plotly figures |
 
 ---
 
@@ -173,3 +227,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 5. Open a Pull Request
 
 ---
+
+## License
+
+[MIT](LICENSE)

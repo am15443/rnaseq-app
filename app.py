@@ -12,6 +12,8 @@ widget interactions (typing, clicking) never reset other widgets.
 
 import streamlit as st
 import pandas as pd
+import io
+import re
 from pathlib import Path
 
 st.set_page_config(
@@ -86,6 +88,11 @@ button[data-baseweb="tab"] { color: #ffffff !important; }
     margin: 0.6rem 0 1rem 0;
     line-height: 1.8;
 }
+/* ── Fix duplicate upload button text ── */
+[data-testid="stIconMaterial"] {
+    display: none !important;
+}
+
 .group-card {
     background: #1e2130;
     border: 1.5px solid #333a55;
@@ -97,11 +104,39 @@ button[data-baseweb="tab"] { color: #ffffff !important; }
 """, unsafe_allow_html=True)
 
 # ── Src imports ───────────────────────────────────────────────────────────────
-from src.data_loader import load_combined_tsv, validate_counts
-from src.dge         import run_dge_all_pairs
-from src.pca         import compute_pca, plot_pca_2d, plot_pca_3d
-from src.volcano     import plot_volcano
-from src.heatmap     import build_heatmap
+from src.data_loader  import load_combined_tsv, validate_counts
+from src.dge          import run_dge_all_pairs
+from src.pca          import compute_pca, plot_pca_2d, plot_pca_3d
+from src.volcano      import plot_volcano
+from src.heatmap      import build_heatmap
+from src.go_enrichment import run_enrichment, plot_go_bars, plot_go_dots, GO_LIBRARIES
+
+
+def export_buttons(fig, filename_stem: str):
+    """Render PNG and SVG download buttons for a Plotly figure."""
+    try:
+        png_bytes = fig.to_image(format="png", scale=3)
+        st.download_button(
+            "⬇ Download PNG",
+            data=png_bytes,
+            file_name=f"{filename_stem}.png",
+            mime="image/png",
+            key=f"dl_png_{filename_stem}",
+        )
+    except Exception:
+        st.caption("⚠️ PNG export unavailable — run `pip install kaleido` to enable.")
+
+    try:
+        svg_bytes = fig.to_image(format="svg")
+        st.download_button(
+            "⬇ Download SVG",
+            data=svg_bytes,
+            file_name=f"{filename_stem}.svg",
+            mime="image/svg+xml",
+            key=f"dl_svg_{filename_stem}",
+        )
+    except Exception:
+        pass
 
 # ── Session state defaults ────────────────────────────────────────────────────
 def _init(key, val):
@@ -158,9 +193,8 @@ st.markdown(
 )
 st.markdown("""
 <div class="schema-box">
-Expected TSV columns (all samples in one file):<br>
-<b>target_id</b> &nbsp;·&nbsp; <b>length</b> &nbsp;·&nbsp; <b>eff_length</b>
-&nbsp;·&nbsp; <b>est_counts</b> &nbsp;·&nbsp; <b>tpm</b>
+Required TSV columns (all other columns are ignored):<br>
+<b>est_counts</b> &nbsp;·&nbsp; <b>tpm</b>
 &nbsp;·&nbsp; <b>gene_name</b> &nbsp;·&nbsp; <b>srr_id</b>
 </div>
 """, unsafe_allow_html=True)
@@ -311,8 +345,8 @@ with st.sidebar:
 # ═════════════════════════════════════════════════════════════════════════════
 # MAIN AREA — Tabs
 # ═════════════════════════════════════════════════════════════════════════════
-tab_samples, tab_dge, tab_volcano, tab_pca, tab_heatmap = st.tabs([
-    "🧪 Samples", "📊 DGE Results", "🌋 Volcano Plots", "🔵 PCA", "🔥 Heatmap",
+tab_samples, tab_dge, tab_volcano, tab_pca, tab_heatmap, tab_go = st.tabs([
+    "🧪 Samples", "📊 DGE Results", "🌋 Volcano Plots", "🔵 PCA", "🔥 Heatmap", "🧬 GO Enrichment",
 ])
 
 # ── Samples overview ──────────────────────────────────────────────────────────
@@ -368,18 +402,40 @@ with tab_volcano:
         st.info("Run DGE analysis first.")
     else:
         colors_dict = st.session_state.get("_colors_dict", {})
+
         col_fc, col_pv = st.columns(2)
         fc_thresh = col_fc.slider("log₂FC threshold", 0.5, 4.0, 1.0, 0.25)
         pv_thresh = col_pv.slider("-log₁₀(padj) threshold", 1.0, 10.0, 1.301, 0.1,
                                   help="1.301 ≈ padj < 0.05")
+
+        st.markdown("**Dot colours** — defaults to your group colours; override with a hex code below:")
+
         for (g1, g2), df in st.session_state.dge_results.items():
             st.markdown(f"#### {g1} vs {g2}")
+
+            cc1, cc2 = st.columns(2)
+            default_up   = colors_dict.get(g1, "#4361ee")
+            default_down = colors_dict.get(g2, "#f72585")
+            color_up   = cc1.text_input(f"Color for {g1} (hex)", value=default_up,
+                                        key=f"vcol_up_{g1}_{g2}")
+            color_down = cc2.text_input(f"Color for {g2} (hex)", value=default_down,
+                                        key=f"vcol_dn_{g1}_{g2}")
+
+            # Validate hex — fall back to default if invalid
+            if not re.match(r"^#[0-9a-fA-F]{6}$", color_up):
+                color_up = default_up
+                cc1.caption("⚠️ Invalid hex, using default.")
+            if not re.match(r"^#[0-9a-fA-F]{6}$", color_down):
+                color_down = default_down
+                cc2.caption("⚠️ Invalid hex, using default.")
+
             fig = plot_volcano(df, g1, g2,
                                fc_thresh=fc_thresh,
                                neg_log10_padj_thresh=pv_thresh,
-                               color_up=colors_dict.get(g1, "#4361ee"),
-                               color_down=colors_dict.get(g2, "#f72585"))
-            st.plotly_chart(fig, use_container_width=True)
+                               color_up=color_up,
+                               color_down=color_down)
+            st.plotly_chart(fig, use_container_width=False)
+            export_buttons(fig, f"volcano_{g1}_vs_{g2}")
 
 # ── PCA ───────────────────────────────────────────────────────────────────────
 with tab_pca:
@@ -411,27 +467,39 @@ with tab_pca:
     if tpm_ready:
         tpm_df      = st.session_state["_tpm_df"]
         sample_meta = st.session_state["_sample_meta"]
-        colors_dict = st.session_state.get("_colors_dict", {})
+        colors_dict = st.session_state.get("_colors_dict", {}).copy()
 
         col_w, col_h = st.columns(2)
         pca_w = col_w.slider("Plot width (px)",  400, 1400, 850, 50)
         pca_h = col_h.slider("Plot height (px)", 300, 900,  550, 50)
-        st.caption("💡 Group colours are set via the colour pickers in the sidebar.")
+
+        st.markdown("**Group colours** — defaults to sidebar pickers; override with a hex code:")
+        color_cols = st.columns(max(1, len(colors_dict)))
+        pca_colors = {}
+        for i, (gname, default_color) in enumerate(colors_dict.items()):
+            with color_cols[i % len(color_cols)]:
+                hex_input = st.text_input(f"{gname} color (hex)", value=default_color,
+                                          key=f"pca_color_{gname}")
+                if re.match(r"^#[0-9a-fA-F]{6}$", hex_input):
+                    pca_colors[gname] = hex_input
+                else:
+                    pca_colors[gname] = default_color
+                    if hex_input != default_color:
+                        st.caption("⚠️ Invalid hex, using default.")
 
         try:
             coords_2d, coords_3d, explained = compute_pca(tpm_df)
             st.markdown("#### 2D PCA")
-            st.plotly_chart(
-                plot_pca_2d(coords_2d, sample_meta, explained, colors_dict,
-                            width=pca_w, height=pca_h),
-                use_container_width=False,
-            )
+            fig2d = plot_pca_2d(coords_2d, sample_meta, explained, pca_colors,
+                                width=pca_w, height=pca_h)
+            st.plotly_chart(fig2d, use_container_width=False)
+            export_buttons(fig2d, "PCA_2D")
+
             st.markdown("#### 3D PCA")
-            st.plotly_chart(
-                plot_pca_3d(coords_3d, sample_meta, explained, colors_dict,
-                            width=pca_w, height=pca_h),
-                use_container_width=False,
-            )
+            fig3d = plot_pca_3d(coords_3d, sample_meta, explained, pca_colors,
+                                width=pca_w, height=pca_h)
+            st.plotly_chart(fig3d, use_container_width=False)
+            export_buttons(fig3d, "PCA_3D")
         except Exception as e:
             st.error(f"PCA failed: {e}")
 
@@ -445,6 +513,7 @@ with tab_heatmap:
         colors_dict = st.session_state.get("_colors_dict", {})
         groups_dict = st.session_state.get("_groups_dict", {})
 
+        # ── Gene list CSVs ────────────────────────────────────────────────────
         gene_list_dir = Path("gene_lists")
         gene_list_dir.mkdir(exist_ok=True)
         csv_files = sorted(gene_list_dir.glob("*.csv"))
@@ -481,14 +550,164 @@ with tab_heatmap:
         if selected_genes:
             st.caption(f"**{len(selected_genes)}** unique gene(s) selected.")
 
+        # ── Build initial gene order in session state ─────────────────────────
+        # Only reset order when gene selection changes
+        gene_selection_key = tuple(sorted(selected_genes))
+        if st.session_state.get("_heatmap_gene_key") != gene_selection_key:
+            st.session_state["_heatmap_gene_key"]   = gene_selection_key
+            st.session_state["_heatmap_gene_order"] = sorted(selected_genes)
+
+        # ── Gene reordering UI ────────────────────────────────────────────────
+        if selected_genes:
+            st.markdown("**🔀 Reorder genes** — select a gene and move it up or down:")
+
+            gene_order = st.session_state["_heatmap_gene_order"]
+
+            # Show current order as a small preview — above the buttons
+            with st.expander("📋 Current gene order (top → bottom on heatmap)", expanded=False):
+                for i, g in enumerate(st.session_state["_heatmap_gene_order"]):
+                    st.write(f"{i+1}. {g}")
+
+            col_list, col_btns = st.columns([3, 1])
+
+            with col_list:
+                selected_gene = st.selectbox(
+                    "Select gene to move",
+                    options=gene_order,
+                    key="hm_gene_select",
+                    label_visibility="collapsed",
+                )
+
+            with col_btns:
+                b1, b2, b3 = st.columns(3)
+                move_top  = b1.button("⏫", key="hm_top",  help="Move to top")
+                move_up   = b2.button("⬆",  key="hm_up",   help="Move up one")
+                move_down = b3.button("⬇",  key="hm_down", help="Move down one")
+
+            if selected_gene and selected_gene in gene_order:
+                idx = gene_order.index(selected_gene)
+                if move_top and idx > 0:
+                    gene_order.insert(0, gene_order.pop(idx))
+                    st.session_state["_heatmap_gene_order"] = gene_order
+                    st.rerun()
+                if move_up and idx > 0:
+                    gene_order[idx], gene_order[idx-1] = gene_order[idx-1], gene_order[idx]
+                    st.session_state["_heatmap_gene_order"] = gene_order
+                    st.rerun()
+                if move_down and idx < len(gene_order) - 1:
+                    gene_order[idx], gene_order[idx+1] = gene_order[idx+1], gene_order[idx]
+                    st.session_state["_heatmap_gene_order"] = gene_order
+                    st.rerun()
+
         if st.button("🔥 Generate Heatmap", type="primary",
                      disabled=len(selected_genes) == 0):
             try:
+                gene_order = st.session_state.get("_heatmap_gene_order", sorted(selected_genes))
                 fig = build_heatmap(
-                    tpm_df, sample_meta, sorted(selected_genes),
+                    tpm_df, sample_meta, gene_order,
                     colors_dict, groups_dict,
                 )
-                st.plotly_chart(fig, use_container_width=True)
-                st.caption("💡 Use the pan tool and drag along the Y axis to reorder genes.")
+                st.session_state["_heatmap_fig"] = fig
             except Exception as e:
                 st.error(f"Heatmap error: {e}")
+
+        # Keep the figure visible after reordering without re-clicking generate
+        if "_heatmap_fig" in st.session_state and selected_genes:
+            fig = st.session_state["_heatmap_fig"]
+            st.plotly_chart(fig, use_container_width=True)
+            export_buttons(fig, "heatmap")
+
+
+# ── GO Enrichment ─────────────────────────────────────────────────────────────
+with tab_go:
+    if not st.session_state.dge_results:
+        st.info("Run DGE analysis first to enable GO enrichment.")
+    else:
+        st.markdown(
+            "Select a comparison and a gene set to query Enrichr for enriched GO terms. "
+            "Genes are filtered by your significance thresholds before submission."
+        )
+
+        # ── Settings ──────────────────────────────────────────────────────────
+        col_a, col_b, col_c = st.columns(3)
+
+        comparison_options = [f"{g1} vs {g2}" for (g1, g2) in st.session_state.dge_results]
+        chosen_comp = col_a.selectbox("Comparison", comparison_options, key="go_comp")
+
+        library_label = col_b.selectbox("Gene set library", list(GO_LIBRARIES.keys()),
+                                        key="go_library")
+        library = GO_LIBRARIES[library_label]
+
+        direction = col_c.selectbox(
+            "Gene direction",
+            ["Up in group 1", "Up in group 2", "All significant"],
+            key="go_direction",
+        )
+
+        col_d, col_e, col_f = st.columns(3)
+        go_fc_thresh  = col_d.slider("log₂FC threshold", 0.5, 4.0, 1.0, 0.25, key="go_fc")
+        go_pv_thresh  = col_e.slider("padj threshold", 0.001, 0.1, 0.05, 0.001,
+                                     format="%.3f", key="go_pv")
+        go_top_n      = col_f.slider("Top N terms", 5, 50, 20, 5, key="go_topn")
+
+        plot_type = st.radio("Plot type", ["Bar chart", "Dot plot"],
+                             horizontal=True, key="go_plottype")
+
+        # Hex color override
+        go_color_input = st.text_input("Plot color (hex)", value="#4361ee", key="go_color")
+        go_color = go_color_input if re.match(r"^#[0-9a-fA-F]{6}$", go_color_input) else "#4361ee"
+        if go_color_input != go_color:
+            st.caption("⚠️ Invalid hex, using default #4361ee.")
+
+        if st.button("🧬 Run GO Enrichment", type="primary", key="go_run"):
+            # Parse chosen comparison
+            g1, g2 = chosen_comp.split(" vs ", 1)
+            dge_df = st.session_state.dge_results.get((g1, g2))
+            if dge_df is None:
+                st.error(f"Could not find results for {chosen_comp}.")
+            else:
+                sig = dge_df[dge_df["padj"] <= go_pv_thresh].copy()
+
+                if direction == "Up in group 1":
+                    sig = sig[sig["log2FoldChange"] >= go_fc_thresh]
+                elif direction == "Up in group 2":
+                    sig = sig[sig["log2FoldChange"] <= -go_fc_thresh]
+                else:
+                    sig = sig[sig["log2FoldChange"].abs() >= go_fc_thresh]
+
+                gene_list = sig.index.tolist()
+                st.caption(f"Submitting **{len(gene_list)}** genes to Enrichr…")
+
+                if len(gene_list) == 0:
+                    st.warning("No genes pass the selected thresholds. "
+                               "Try relaxing the FC or padj cutoffs.")
+                else:
+                    with st.spinner("Querying Enrichr…"):
+                        results_df = run_enrichment(
+                            gene_list,
+                            library=library,
+                            cutoff=go_pv_thresh,
+                            top_n=go_top_n,
+                        )
+
+                    if results_df is not None and not results_df.empty:
+                        title = (f"{library_label} — {direction}<br>"
+                                 f"{g1} vs {g2}")
+
+                        if plot_type == "Bar chart":
+                            fig = plot_go_bars(results_df, title=title,
+                                               color=go_color, width=900)
+                        else:
+                            fig = plot_go_dots(results_df, title=title,
+                                               color=go_color, width=900)
+
+                        st.plotly_chart(fig, use_container_width=False)
+                        export_buttons(fig, f"GO_{g1}_vs_{g2}_{library_label.replace(' ','_')}")
+
+                        st.download_button(
+                            "⬇ Download GO results CSV",
+                            data=results_df.to_csv(index=False).encode(),
+                            file_name=f"GO_{g1}_vs_{g2}_{library_label.replace(' ','_')}.csv",
+                            mime="text/csv",
+                            key="go_dl",
+                        )

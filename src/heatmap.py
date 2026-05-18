@@ -105,8 +105,7 @@ def build_heatmap(
             colorscale="RdBu_r",
             zmid=0,
             colorbar=dict(
-                title="Z-score<br>(log₂ TPM)",
-                titleside="right",
+                title=dict(text="Z-score<br>(log₂ TPM)", side="right"),
                 thickness=12,
                 len=0.9,
                 y=0.5,
@@ -149,11 +148,16 @@ def build_heatmap(
         barmode="stack",
         plot_bgcolor="white",
         paper_bgcolor="white",
-        font=dict(family="DM Sans, sans-serif", size=11),
+        font=dict(family="DM Sans, sans-serif", size=11, color="#111111"),
         legend=dict(
-            title="Group",
+            title=dict(
+                text="Group",
+                font=dict(color="#111111", size=12),
+                side="top",
+            ),
             orientation="v",
             x=1.08, y=0.97,
+            font=dict(color="#111111"),
         ),
         margin=dict(l=130, r=120, t=40, b=20),
         dragmode="pan",
@@ -161,14 +165,15 @@ def build_heatmap(
 
     # Heatmap axes
     fig.update_xaxes(
-        tickangle=-40, tickfont=dict(size=10),
+        tickangle=-40, tickfont=dict(size=10, color="#111111"),
         showgrid=False, row=1, col=1,
     )
     fig.update_yaxes(
         title_text="Gene",
-        tickfont=dict(size=10),
-        autorange="reversed",   # top-to-bottom gene order
-        fixedrange=False,       # allow user to zoom / drag on gene axis
+        tickfont=dict(size=10, color="#111111"),
+        title_font=dict(color="#111111"),
+        autorange="reversed",
+        fixedrange=False,
         showgrid=False, row=1, col=1,
     )
 

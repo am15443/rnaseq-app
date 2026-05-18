@@ -1,12 +1,12 @@
 """
 src/data_loader.py
 ──────────────────
-Load a single combined TSV file containing all samples, with the schema:
+Load a single combined TSV file containing all samples.
 
-    target_id | length | eff_length | est_counts | tpm | gene_name | srr_id
+Only four columns are required regardless of what else is in the file:
+    est_counts  |  tpm  |  gene_name  |  srr_id
 
-The srr_id column distinguishes samples. After loading, the app lets the
-user assign each srr_id to a named group for DGE/PCA/heatmap analysis.
+All other columns are ignored.
 """
 
 from __future__ import annotations
@@ -17,18 +17,18 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import streamlit as st
 
-REQUIRED_COLS = {"target_id", "est_counts", "tpm", "gene_name", "srr_id"}
+REQUIRED_COLS = {"est_counts", "tpm", "gene_name", "srr_id"}
 
 
 def load_combined_tsv(uploaded_file) -> Tuple[pd.DataFrame, List[str]]:
     """
     Parse a single combined TSV containing all samples.
+    Only the four required columns are read; everything else is ignored.
 
     Returns
     -------
     gene_sample_df : MultiIndex DataFrame — rows=(gene_name, srr_id),
                      columns=[est_counts, tpm]
-                     i.e. already aggregated transcripts → genes, per sample.
     srr_ids        : sorted list of all unique srr_ids found in the file
     """
     with st.spinner("Reading TSV file… this may take a moment for large files."):
@@ -41,8 +41,12 @@ def load_combined_tsv(uploaded_file) -> Tuple[pd.DataFrame, List[str]]:
     if missing:
         raise ValueError(
             f"TSV is missing required columns: {', '.join(sorted(missing))}.\n"
+            f"Required: est_counts, tpm, gene_name, srr_id\n"
             f"Found: {df.columns.tolist()}"
         )
+
+    # ── Keep only the 4 columns we need, drop everything else ────────────────
+    df = df[["est_counts", "tpm", "gene_name", "srr_id"]].copy()
 
     # ── Coerce types ──────────────────────────────────────────────────────────
     df["est_counts"] = pd.to_numeric(df["est_counts"], errors="coerce").fillna(0.0)
@@ -54,7 +58,7 @@ def load_combined_tsv(uploaded_file) -> Tuple[pd.DataFrame, List[str]]:
     bad = {"", "nan", "na", "none", "-", ".", "n/a"}
     df  = df[~df["gene_name"].str.lower().isin(bad)]
 
-    # ── Aggregate transcripts → genes, per sample ─────────────────────────────
+    # ── Aggregate transcripts → genes per sample (sum) ────────────────────────
     gene_sample_df = (
         df.groupby(["gene_name", "srr_id"], sort=False)
         .agg(est_counts=("est_counts", "sum"), tpm=("tpm", "sum"))
@@ -82,12 +86,6 @@ def validate_counts(
     tpm_df      : (n_genes × n_samples) TPM values                 — for PCA/heatmap
     sample_meta : DataFrame indexed by srr_id with column 'group'
     """
-    # ── DEBUG ─────────────────────────────────────────────────────────────────
-    st.write("**DEBUG — groups received:**", groups)
-    matrix_srr_ids = gene_sample_df.index.get_level_values("srr_id").unique().tolist()
-    st.write("**DEBUG — srr_ids in matrix:**", sorted(matrix_srr_ids))
-
-    # Collect samples in group order
     sample_order: List[str] = []
     meta_rows: List[dict]   = []
 
@@ -95,8 +93,6 @@ def validate_counts(
         for s in srr_ids:
             sample_order.append(s)
             meta_rows.append({"sample": s, "group": group_name})
-
-    st.write("**DEBUG — sample_order built:**", sample_order)
 
     if not sample_order:
         raise ValueError("No samples are assigned to any group.")
@@ -117,14 +113,14 @@ def validate_counts(
         .fillna(0.0)
     )
 
-    # Filter to only the selected samples, in group order
+    # Filter to only selected samples in group order
     available = [s for s in sample_order if s in counts_df.columns]
     missing   = [s for s in sample_order if s not in counts_df.columns]
     if missing:
         st.warning(f"⚠️ These srr_ids were not found in the TSV: {missing}")
 
-    counts_df = counts_df[available]
-    tpm_df    = tpm_df[available]
+    counts_df   = counts_df[available]
+    tpm_df      = tpm_df[available]
 
     # Drop all-zero genes
     keep      = counts_df.sum(axis=1) > 0
