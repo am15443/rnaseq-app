@@ -102,7 +102,7 @@ def build_heatmap(
             y=matched,
             text=hover,
             hoverinfo="text",
-            colorscale="RdBu_r",
+            colorscale=[[0, "#d63027"], [0.5, "#f7f7f7"], [1, "#1b984e"]],
             zmid=0,
             colorbar=dict(
                 title=dict(text="Z-score<br>(log₂ TPM)", side="right"),
@@ -115,28 +115,58 @@ def build_heatmap(
         row=1, col=1,
     )
 
-    # ── Group annotation bar ──────────────────────────────────────────────────
-    # Track which groups have been added to legend already
-    legend_groups_added: set = set()
+    # ── Group annotation bar — one rectangle per group ───────────────────────
+    # Build a mapping of sample position index so we can calculate x spans
+    sample_positions = {samp: i for i, samp in enumerate(ordered_samples)}
 
+    # Group → list of sample indices
+    group_sample_indices: Dict[str, list] = {}
     for samp in ordered_samples:
-        grp   = sample_meta.loc[samp, "group"] if samp in sample_meta.index else "?"
-        color = group_colors.get(grp, "#aaaaaa")
-        show_legend = grp not in legend_groups_added
-        legend_groups_added.add(grp)
+        grp = sample_meta.loc[samp, "group"] if samp in sample_meta.index else "?"
+        group_sample_indices.setdefault(grp, []).append(sample_positions[samp])
 
+    # Add one invisible Bar trace per group just for the legend
+    for grp, indices in group_sample_indices.items():
+        color = group_colors.get(grp, "#aaaaaa")
         fig.add_trace(
             go.Bar(
-                x=[samp],
-                y=[1],
+                x=[ordered_samples[indices[0]]],
+                y=[0],                      # height 0 — invisible, legend only
                 marker_color=color,
                 name=grp,
-                showlegend=show_legend,
+                showlegend=True,
                 legendgroup=grp,
-                hovertext=grp,
-                hoverinfo="text",
+                hoverinfo="skip",
             ),
             row=2, col=1,
+        )
+
+    # Draw one filled rectangle per group as a shape on the annotation subplot
+    # x values in categorical axes are 0-indexed positions
+    for grp, indices in group_sample_indices.items():
+        color  = group_colors.get(grp, "#aaaaaa")
+        x_start = min(indices) - 0.5
+        x_end   = max(indices) + 0.5
+
+        fig.add_shape(
+            type="rect",
+            xref="x2", yref="y2",          # subplot 2 axes
+            x0=x_start, x1=x_end,
+            y0=0, y1=1,
+            fillcolor=color,
+            line=dict(color="white", width=1),
+            layer="below",
+        )
+
+        # Group name centered inside the rectangle
+        fig.add_annotation(
+            xref="x2", yref="y2",
+            x=(x_start + x_end) / 2,
+            y=0.5,
+            text=f"<b>{grp}</b>",
+            showarrow=False,
+            font=dict(size=11, color="white", family="DM Sans, sans-serif"),
+            bgcolor="rgba(0,0,0,0)",
         )
 
     # ── Layout ────────────────────────────────────────────────────────────────
@@ -145,6 +175,7 @@ def build_heatmap(
 
     fig.update_layout(
         height=fig_height,
+       width=max(400, n_samples * 60 + 300),
         barmode="stack",
         plot_bgcolor="white",
         paper_bgcolor="white",
@@ -177,8 +208,12 @@ def build_heatmap(
         showgrid=False, row=1, col=1,
     )
 
-    # Annotation bar axes
-    fig.update_xaxes(showticklabels=False, showgrid=False, row=2, col=1)
+    # Annotation bar axes — hide everything, group labels drawn as annotations
+    fig.update_xaxes(
+        showticklabels=False, showgrid=False,
+        range=[-0.5, n_samples - 0.5],
+        row=2, col=1,
+    )
     fig.update_yaxes(
         showticklabels=False, showgrid=False,
         range=[0, 1], fixedrange=True, row=2, col=1,

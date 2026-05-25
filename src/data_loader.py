@@ -119,13 +119,13 @@ def validate_counts(
     if missing:
         st.warning(f"⚠️ These srr_ids were not found in the TSV: {missing}")
 
-    counts_df   = counts_df[available]
-    tpm_df      = tpm_df[available]
+    counts_df = counts_df[available]
+    tpm_df    = tpm_df[available]
 
-    # Drop all-zero genes
+    # Drop all-zero genes from counts only (for DGE) —
+    # tpm_df keeps ALL genes including zero-TPM ones so heatmap can find them
     keep      = counts_df.sum(axis=1) > 0
     counts_df = counts_df.loc[keep]
-    tpm_df    = tpm_df.loc[tpm_df.index.isin(counts_df.index)]
 
     # Trim sample_meta to available samples
     sample_meta = sample_meta.loc[available]

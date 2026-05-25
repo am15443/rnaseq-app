@@ -156,7 +156,7 @@ def plot_go_bars(
         ),
         hovertext=hover,
         hoverinfo="text",
-        text=df["Gene Count"].astype(str) + " genes",
+        text=df["Gene Count"].astype(str),
         textposition="outside",
         textfont=dict(size=11, color="#111111"),
     ))

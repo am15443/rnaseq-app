@@ -473,6 +473,8 @@ with tab_pca:
         pca_w = col_w.slider("Plot width (px)",  400, 1400, 850, 50)
         pca_h = col_h.slider("Plot height (px)", 300, 900,  550, 50)
 
+        show_labels = st.toggle("Show sample labels", value=True)
+
         st.markdown("**Group colours** — defaults to sidebar pickers; override with a hex code:")
         color_cols = st.columns(max(1, len(colors_dict)))
         pca_colors = {}
@@ -491,13 +493,13 @@ with tab_pca:
             coords_2d, coords_3d, explained = compute_pca(tpm_df)
             st.markdown("#### 2D PCA")
             fig2d = plot_pca_2d(coords_2d, sample_meta, explained, pca_colors,
-                                width=pca_w, height=pca_h)
+                                width=pca_w, height=pca_h, show_labels=show_labels)
             st.plotly_chart(fig2d, use_container_width=False)
             export_buttons(fig2d, "PCA_2D")
 
             st.markdown("#### 3D PCA")
             fig3d = plot_pca_3d(coords_3d, sample_meta, explained, pca_colors,
-                                width=pca_w, height=pca_h)
+                                width=pca_w, height=pca_h, show_labels=show_labels)
             st.plotly_chart(fig3d, use_container_width=False)
             export_buttons(fig3d, "PCA_3D")
         except Exception as e:
@@ -517,7 +519,10 @@ with tab_heatmap:
         gene_list_dir = Path("gene_lists")
         gene_list_dir.mkdir(exist_ok=True)
         csv_files = sorted(gene_list_dir.glob("*.csv"))
-        selected_genes: set = set()
+
+        # Use a list to preserve insertion order; use a set only for dedup tracking
+        selected_genes_ordered: list = []
+        selected_genes_seen:    set  = set()
 
         if csv_files:
             chosen_csvs = st.multiselect(
@@ -529,33 +534,38 @@ with tab_heatmap:
                 try:
                     gdf = pd.read_csv(gene_list_dir / f"{csv_name}.csv")
                     col = gdf.columns[0]
-                    selected_genes.update(
-                        gdf[col].dropna().astype(str).str.strip().str.upper().tolist()
-                    )
+                    for g in gdf[col].dropna().astype(str).str.strip().tolist():
+                        if g and g.lower() not in selected_genes_seen:
+                            selected_genes_ordered.append(g)   # preserve exact case + order
+                            selected_genes_seen.add(g.lower())  # dedup case-insensitively
                 except Exception as e:
                     st.warning(f"Could not read {csv_name}.csv: {e}")
         else:
             st.caption("No CSVs found in gene_lists/. Add gene list CSVs there to use the dropdown.")
 
         manual = st.text_input(
-            "✏️ Additional genes (comma-separated, case-insensitive)",
-            placeholder="e.g.  ACTB, GAPDH, TP53",
+            "✏️ Additional genes (comma-separated)",
+            placeholder="e.g.  Actb, Gapdh, Tp53",
+            help="Gene names are used exactly as typed. Duplicates already in the list are skipped.",
         )
         if manual:
             for g in manual.split(","):
-                g = g.strip().upper()
-                if g:
-                    selected_genes.add(g)
+                g = g.strip()
+                if g and g.lower() not in selected_genes_seen:
+                    selected_genes_ordered.append(g)
+                    selected_genes_seen.add(g.lower())
+
+        selected_genes = selected_genes_ordered  # final ordered list
 
         if selected_genes:
             st.caption(f"**{len(selected_genes)}** unique gene(s) selected.")
 
         # ── Build initial gene order in session state ─────────────────────────
-        # Only reset order when gene selection changes
-        gene_selection_key = tuple(sorted(selected_genes))
+        # Reset order only when gene selection changes (compare as tuple to preserve order)
+        gene_selection_key = tuple(selected_genes)
         if st.session_state.get("_heatmap_gene_key") != gene_selection_key:
             st.session_state["_heatmap_gene_key"]   = gene_selection_key
-            st.session_state["_heatmap_gene_order"] = sorted(selected_genes)
+            st.session_state["_heatmap_gene_order"] = list(selected_genes)  # preserve CSV order
 
         # ── Gene reordering UI ────────────────────────────────────────────────
         if selected_genes:
@@ -602,7 +612,7 @@ with tab_heatmap:
         if st.button("🔥 Generate Heatmap", type="primary",
                      disabled=len(selected_genes) == 0):
             try:
-                gene_order = st.session_state.get("_heatmap_gene_order", sorted(selected_genes))
+                gene_order = st.session_state.get("_heatmap_gene_order", list(selected_genes))
                 fig = build_heatmap(
                     tpm_df, sample_meta, gene_order,
                     colors_dict, groups_dict,
@@ -614,7 +624,7 @@ with tab_heatmap:
         # Keep the figure visible after reordering without re-clicking generate
         if "_heatmap_fig" in st.session_state and selected_genes:
             fig = st.session_state["_heatmap_fig"]
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=False)
             export_buttons(fig, "heatmap")
 
 

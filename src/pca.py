@@ -31,10 +31,8 @@ def compute_pca(
     coords_3d : samples × [PC1, PC2, PC3]
     explained : explained variance ratios array
     """
-    # samples × genes, log2 transform
     X = np.log2(tpm_df.T.astype(float) + 1)
 
-    # Remove zero-variance genes
     var = X.var(axis=0)
     X   = X.loc[:, var > 0]
 
@@ -62,6 +60,7 @@ def plot_pca_2d(
     group_colors: Dict[str, str],
     width: int = 800,
     height: int = 550,
+    show_labels: bool = True,
 ) -> go.Figure:
     fig    = go.Figure()
     groups = sample_meta["group"].unique()
@@ -73,9 +72,9 @@ def plot_pca_2d(
 
         fig.add_trace(go.Scatter(
             x=sub["PC1"], y=sub["PC2"],
-            mode="markers+text",
+            mode="markers+text" if show_labels else "markers",
             name=group,
-            text=sub.index.tolist(),
+            text=sub.index.tolist() if show_labels else None,
             textposition="top center",
             textfont=dict(size=13, color="#111111"),
             marker=dict(size=14, color=color,
@@ -86,7 +85,10 @@ def plot_pca_2d(
     fig.update_layout(
         xaxis_title=f"PC1 ({pct[0] if pct else ''})",
         yaxis_title=f"PC2 ({pct[1] if len(pct)>1 else ''})",
-        legend_title="Group",
+        legend=dict(
+            title=dict(text="Group", font=dict(size=14, color="#111111")),
+            font=dict(color="#111111", size=13),
+        ),
         width=width, height=height,
         plot_bgcolor="#f5f5f5", paper_bgcolor="#ffffff",
         font=dict(family="DM Sans, sans-serif", size=15, color="#111111"),
@@ -109,6 +111,7 @@ def plot_pca_3d(
     group_colors: Dict[str, str],
     width: int = 800,
     height: int = 550,
+    show_labels: bool = True,
 ) -> go.Figure:
     fig     = go.Figure()
     has_pc3 = "PC3" in coords_3d.columns
@@ -122,9 +125,9 @@ def plot_pca_3d(
         fig.add_trace(go.Scatter3d(
             x=sub["PC1"], y=sub["PC2"],
             z=sub["PC3"] if has_pc3 else [0]*len(sub),
-            mode="markers+text",
+            mode="markers+text" if show_labels else "markers",
             name=group,
-            text=sub.index.tolist(),
+            text=sub.index.tolist() if show_labels else None,
             textposition="top center",
             textfont=dict(size=12, color="#111111"),
             marker=dict(size=8, color=color,
@@ -145,7 +148,10 @@ def plot_pca_3d(
                        tickfont=dict(size=13, color="#111111"),
                        gridcolor="#dddddd"),
         ),
-        legend_title="Group",
+        legend=dict(
+            title=dict(text="Group", font=dict(size=14, color="#111111")),
+            font=dict(color="#111111", size=13),
+        ),
         width=width, height=height,
         paper_bgcolor="#ffffff",
         font=dict(family="DM Sans, sans-serif", size=15, color="#111111"),
