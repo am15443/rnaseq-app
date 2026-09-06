@@ -97,14 +97,14 @@ Once complete, all analysis tabs become available.
 
 ## Analysis Tabs
 
-### 📊 DGE Results
+### DGE Results
 
 - One results table per pairwise comparison
 - Columns: gene, baseMean, log2FoldChange, pvalue, padj
 - Summary metrics shown: total genes tested, significant genes (padj < 0.05), upregulated count
 - Download results as CSV per comparison
 
-### 🌋 Volcano Plots
+### Volcano Plots
 
 - One square volcano plot per group pair
 - X axis: log₂ fold change — positive = higher in group 1
@@ -114,7 +114,7 @@ Once complete, all analysis tabs become available.
 - **Per-comparison hex color inputs** — override the default group colors with any hex code
 - Export each plot as PNG or SVG
 
-### 🔵 PCA
+### PCA
 
 - One point per sample, colored by group
 - **Per-group hex color inputs** above the plots — override sidebar colors with any hex code
@@ -122,7 +122,7 @@ Once complete, all analysis tabs become available.
 - Adjustable plot width and height
 - Export each plot as PNG or SVG
 
-### 🔥 Heatmap
+### Heatmap
 
 - Select genes from one or more **gene list CSVs** placed in the `gene_lists/` folder
 - Add additional genes manually by typing comma-separated names (case-insensitive)
@@ -135,7 +135,7 @@ Once complete, all analysis tabs become available.
 - Hover tooltip shows gene, sample, group, raw TPM, and Z-score
 - Export as PNG or SVG
 
-### 🧬 GO Enrichment
+### GO Enrichment
 
 - Select a pairwise comparison and gene direction (up in group 1, up in group 2, or all significant)
 - Adjust log₂FC and padj thresholds independently
