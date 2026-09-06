@@ -68,7 +68,7 @@ def plot_pca_2d(
     for group in groups:
         samples = sample_meta.index[sample_meta["group"] == group].tolist()
         sub     = coords_2d.loc[[s for s in samples if s in coords_2d.index]]
-        color   = group_colors.get(group, "#4361ee")
+        color   = group_colors.get(group, "#4C848D")
 
         fig.add_trace(go.Scatter(
             x=sub["PC1"], y=sub["PC2"],
@@ -120,7 +120,7 @@ def plot_pca_3d(
     for group in groups:
         samples = sample_meta.index[sample_meta["group"] == group].tolist()
         sub     = coords_3d.loc[[s for s in samples if s in coords_3d.index]]
-        color   = group_colors.get(group, "#4361ee")
+        color   = group_colors.get(group, "#4C848D")
 
         fig.add_trace(go.Scatter3d(
             x=sub["PC1"], y=sub["PC2"],

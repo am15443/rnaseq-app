@@ -18,7 +18,7 @@ from pathlib import Path
 
 st.set_page_config(
     page_title="RNAseq Analysis Suite",
-    page_icon="🧬",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -32,9 +32,9 @@ st.markdown("""
 html { font-size: 18px !important; }
 
 /* ── Dark backgrounds ── */
-.stApp { background-color: #0f1117; }
-section[data-testid="stSidebar"] { background-color: #1a1d27; }
-section[data-testid="stSidebar"] > div { background-color: #1a1d27; }
+.stApp { background-color: #30525C; }
+section[data-testid="stSidebar"] { background-color: #264147; }
+section[data-testid="stSidebar"] > div { background-color: #264147; }
 
 /* ── White text globally ── */
 .stApp, .stApp * {
@@ -47,26 +47,48 @@ section[data-testid="stSidebar"] * { color: #ffffff; }
 
 /* ── Inputs dark ── */
 input, textarea, [data-baseweb="input"] input {
-    background-color: #2a2d3a !important;
+    background-color: #264147 !important;
     color: #ffffff !important;
 }
 
 /* ── Multiselect dropdown dark ── */
-[data-baseweb="select"] > div { background-color: #2a2d3a !important; }
-[data-baseweb="menu"] { background-color: #2a2d3a !important; }
-[data-baseweb="option"] { background-color: #2a2d3a !important; color: #ffffff !important; }
-[data-baseweb="tag"] { background-color: #4361ee !important; color: #ffffff !important; }
+[data-baseweb="select"] > div { background-color: #264147 !important; }
+[data-baseweb="menu"] { background-color: #264147 !important; }
+[data-baseweb="option"] { background-color: #264147 !important; color: #ffffff !important; }
+[data-baseweb="tag"] { background-color: #4C848D !important; color: #ffffff !important; }
 
 /* ── Buttons ── */
 .stButton > button {
-    background-color: #2a2d3a;
+    background-color: #4C848D;
     color: #ffffff;
-    border: 1px solid #444;
+    border: 1px solid #DCAA89;
     font-size: 1rem;
 }
 
 /* ── Tab text ── */
 button[data-baseweb="tab"] { color: #ffffff !important; }
+
+/* ── Top header band: make it opaque so the injected title reads cleanly ── */
+header[data-testid="stHeader"] {
+    background-color: #C35627 !important;
+}
+
+/* ── App title placed in the header band, left-adjusted next to the ── */
+/* ── hamburger, sitting to the left of the Deploy button / menu.     ── */
+header[data-testid="stHeader"]::before {
+    content: "RNAseq Analysis Suite";
+    position: absolute;
+    left: 3.25rem;                 /* clears the hamburger icon */
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'DM Mono', monospace;
+    font-size: 1.25rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    white-space: nowrap;
+    pointer-events: none;
+}
 
 .main-title {
     font-family: 'DM Mono', monospace;
@@ -76,15 +98,15 @@ button[data-baseweb="tab"] { color: #ffffff !important; }
     letter-spacing: -0.02em;
     margin-bottom: 0;
 }
-.subtitle { color: #aaaaaa; font-size: 1rem; margin-top: 0.1rem; margin-bottom: 0; }
+.subtitle { color: #BFB9B5; font-size: 1rem; margin-top: 0.1rem; margin-bottom: 0; }
 .schema-box {
-    background: #1e2130;
-    border-left: 3px solid #4361ee;
+    background: #264147;
+    border-left: 3px solid #C35627;
     border-radius: 6px;
     padding: 0.6rem 1rem;
     font-family: 'DM Mono', monospace;
     font-size: 0.9rem;
-    color: #dddddd;
+    color: #DCAA89;
     margin: 0.6rem 0 1rem 0;
     line-height: 1.8;
 }
@@ -94,8 +116,8 @@ button[data-baseweb="tab"] { color: #ffffff !important; }
 }
 
 .group-card {
-    background: #1e2130;
-    border: 1.5px solid #333a55;
+    background: #264147;
+    border: 1.5px solid #4C848D;
     border-radius: 10px;
     padding: 0.85rem 1rem;
     margin-bottom: 0.75rem;
@@ -117,19 +139,19 @@ def export_buttons(fig, filename_stem: str):
     try:
         png_bytes = fig.to_image(format="png", scale=3)
         st.download_button(
-            "⬇ Download PNG",
+            "Download PNG",
             data=png_bytes,
             file_name=f"{filename_stem}.png",
             mime="image/png",
             key=f"dl_png_{filename_stem}",
         )
     except Exception:
-        st.caption("⚠️ PNG export unavailable — run `pip install kaleido` to enable.")
+        st.caption("PNG export unavailable — run `pip install kaleido` to enable.")
 
     try:
         svg_bytes = fig.to_image(format="svg")
         st.download_button(
-            "⬇ Download SVG",
+            "Download SVG",
             data=svg_bytes,
             file_name=f"{filename_stem}.svg",
             mime="image/svg+xml",
@@ -153,8 +175,8 @@ _init("next_gid",       0)
 _init("dge_results",    {})
 
 DEFAULT_COLORS = [
-    "#4361ee", "#f72585", "#4cc9f0", "#7209b7",
-    "#06d6a0", "#f77f00", "#ef233c", "#3a86ff",
+    "#4C848D", "#C35627", "#DCAA89", "#30525C",
+    "#D6794D", "#BFB9B5", "#5FA3AD", "#8B3D1A",
 ]
 
 # ── Helper: add / remove groups ───────────────────────────────────────────────
@@ -185,7 +207,7 @@ def on_samples_change(gid):
     st.session_state.group_samples[gid] = st.session_state[f"samples_{gid}"]
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown('<p class="main-title">🧬 RNAseq Analysis Suite</p>', unsafe_allow_html=True)
+# App title lives in the top header band (see stHeader::before in CSS above).
 st.markdown(
     '<p class="subtitle">Upload your combined TSV · Assign srr_ids to groups · '
     'Explore differential expression</p>',
@@ -206,7 +228,7 @@ st.divider()
 with st.sidebar:
 
     # ── Step 1: Upload ────────────────────────────────────────────────────────
-    st.markdown("### 📂 Step 1 — Upload Combined TSV")
+    st.markdown("### Step 1 — Upload Combined TSV")
     st.caption("One file containing all samples. The srr_id column identifies each sample.")
 
     uploaded = st.file_uploader(
@@ -222,7 +244,7 @@ with st.sidebar:
             gene_sample_df, srr_ids = load_combined_tsv(uploaded)
             st.session_state.gene_sample_df = gene_sample_df
             st.session_state.all_srr_ids    = srr_ids
-            st.success(f"✅ {len(srr_ids)} sample(s) detected.")
+            st.success(f"{len(srr_ids)} sample(s) detected.")
         except Exception as e:
             st.error(f"Failed to load file: {e}")
 
@@ -230,7 +252,7 @@ with st.sidebar:
         st.caption(f"Samples: {', '.join(st.session_state.all_srr_ids)}")
 
         # Button to clear and re-upload
-        if st.button("↩ Clear & upload new file", use_container_width=True):
+        if st.button("Clear & upload new file", use_container_width=True):
             for k in ["gene_sample_df", "all_srr_ids", "dge_results",
                       "_counts_df", "_tpm_df", "_sample_meta"]:
                 st.session_state.pop(k, None)
@@ -247,15 +269,15 @@ with st.sidebar:
     st.divider()
 
     # ── Step 2: Group Builder ─────────────────────────────────────────────────
-    st.markdown("### 🗂 Step 2 — Define Groups")
+    st.markdown("### Step 2 — Define Groups")
     st.caption("Create groups, name them, pick a colour, then assign srr_ids.")
 
     all_srr_ids = st.session_state.all_srr_ids
 
     if not all_srr_ids:
-        st.caption("⬆️ Upload a TSV file first.")
+        st.caption("Upload a TSV file first.")
     else:
-        st.button("➕ Add Group", on_click=add_group, use_container_width=True)
+        st.button("Add Group", on_click=add_group, use_container_width=True)
 
         for gid in list(st.session_state.group_ids):
             st.markdown('<div class="group-card">', unsafe_allow_html=True)
@@ -292,7 +314,7 @@ with st.sidebar:
             )
 
             st.button(
-                "🗑 Remove group",
+                "Remove group",
                 key=f"del_{gid}",
                 on_click=remove_group,
                 args=(gid,),
@@ -304,7 +326,7 @@ with st.sidebar:
     st.divider()
 
     # ── Step 3: Run Analysis ──────────────────────────────────────────────────
-    st.markdown("### 🚀 Step 3 — Run Analysis")
+    st.markdown("### Step 3 — Run Analysis")
 
     # Build groups dict {name: [srr_ids]} for downstream modules
     groups_dict = {
@@ -338,15 +360,15 @@ with st.sidebar:
 
     if not can_run:
         if st.session_state.gene_sample_df is None:
-            st.caption("⬆️ Upload a TSV file to get started.")
+            st.caption("Upload a TSV file to get started.")
         else:
-            st.caption("⚠️ Define ≥ 2 groups with srr_ids assigned.")
+            st.caption("Define ≥ 2 groups with srr_ids assigned.")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # MAIN AREA — Tabs
 # ═════════════════════════════════════════════════════════════════════════════
 tab_samples, tab_dge, tab_volcano, tab_pca, tab_heatmap, tab_go = st.tabs([
-    "🧪 Samples", "📊 DGE Results", "🌋 Volcano Plots", "🔵 PCA", "🔥 Heatmap", "🧬 GO Enrichment",
+    "Samples", "DGE Results", "Volcano Plots", "PCA", "Heatmap", "GO Enrichment",
 ])
 
 # ── Samples overview ──────────────────────────────────────────────────────────
@@ -372,7 +394,7 @@ with tab_samples:
         if unassigned:
             st.warning(f"{len(unassigned)} sample(s) not yet assigned: {', '.join(unassigned)}")
         else:
-            st.success("All samples are assigned to a group. ✅")
+            st.success("All samples are assigned to a group.")
 
 # ── DGE Results ───────────────────────────────────────────────────────────────
 with tab_dge:
@@ -389,7 +411,7 @@ with tab_dge:
                 st.dataframe(df.sort_values("padj").round(5),
                              use_container_width=True, height=320)
                 st.download_button(
-                    f"⬇ Download {g1}_vs_{g2}.csv",
+                    f"Download {g1}_vs_{g2}.csv",
                     data=df.to_csv(index=True).encode(),
                     file_name=f"DGE_{g1}_vs_{g2}.csv",
                     mime="text/csv",
@@ -414,8 +436,8 @@ with tab_volcano:
             st.markdown(f"#### {g1} vs {g2}")
 
             cc1, cc2 = st.columns(2)
-            default_up   = colors_dict.get(g1, "#4361ee")
-            default_down = colors_dict.get(g2, "#f72585")
+            default_up   = colors_dict.get(g1, "#4C848D")
+            default_down = colors_dict.get(g2, "#C35627")
             color_up   = cc1.text_input(f"Color for {g1} (hex)", value=default_up,
                                         key=f"vcol_up_{g1}_{g2}")
             color_down = cc2.text_input(f"Color for {g2} (hex)", value=default_down,
@@ -424,10 +446,10 @@ with tab_volcano:
             # Validate hex — fall back to default if invalid
             if not re.match(r"^#[0-9a-fA-F]{6}$", color_up):
                 color_up = default_up
-                cc1.caption("⚠️ Invalid hex, using default.")
+                cc1.caption("Invalid hex, using default.")
             if not re.match(r"^#[0-9a-fA-F]{6}$", color_down):
                 color_down = default_down
-                cc2.caption("⚠️ Invalid hex, using default.")
+                cc2.caption("Invalid hex, using default.")
 
             fig = plot_volcano(df, g1, g2,
                                fc_thresh=fc_thresh,
@@ -487,7 +509,7 @@ with tab_pca:
                 else:
                     pca_colors[gname] = default_color
                     if hex_input != default_color:
-                        st.caption("⚠️ Invalid hex, using default.")
+                        st.caption("Invalid hex, using default.")
 
         try:
             coords_2d, coords_3d, explained = compute_pca(tpm_df)
@@ -526,7 +548,7 @@ with tab_heatmap:
 
         if csv_files:
             chosen_csvs = st.multiselect(
-                "📋 Select gene list CSV(s)",
+                "Select gene list CSV(s)",
                 options=[f.stem for f in csv_files],
                 help="Place CSV files in the gene_lists/ folder. First column = gene names.",
             )
@@ -544,7 +566,7 @@ with tab_heatmap:
             st.caption("No CSVs found in gene_lists/. Add gene list CSVs there to use the dropdown.")
 
         manual = st.text_input(
-            "✏️ Additional genes (comma-separated)",
+            "Additional genes (comma-separated)",
             placeholder="e.g.  Actb, Gapdh, Tp53",
             help="Gene names are used exactly as typed. Duplicates already in the list are skipped.",
         )
@@ -569,12 +591,12 @@ with tab_heatmap:
 
         # ── Gene reordering UI ────────────────────────────────────────────────
         if selected_genes:
-            st.markdown("**🔀 Reorder genes** — select a gene and move it up or down:")
+            st.markdown("**Reorder genes** — select a gene and move it up or down:")
 
             gene_order = st.session_state["_heatmap_gene_order"]
 
             # Show current order as a small preview — above the buttons
-            with st.expander("📋 Current gene order (top → bottom on heatmap)", expanded=False):
+            with st.expander("Current gene order (top → bottom on heatmap)", expanded=False):
                 for i, g in enumerate(st.session_state["_heatmap_gene_order"]):
                     st.write(f"{i+1}. {g}")
 
@@ -591,8 +613,8 @@ with tab_heatmap:
             with col_btns:
                 b1, b2, b3 = st.columns(3)
                 move_top  = b1.button("⏫", key="hm_top",  help="Move to top")
-                move_up   = b2.button("⬆",  key="hm_up",   help="Move up one")
-                move_down = b3.button("⬇",  key="hm_down", help="Move down one")
+                move_up   = b2.button("Move up",  key="hm_up",   help="Move up one")
+                move_down = b3.button("Move down",  key="hm_down", help="Move down one")
 
             if selected_gene and selected_gene in gene_order:
                 idx = gene_order.index(selected_gene)
@@ -609,7 +631,7 @@ with tab_heatmap:
                     st.session_state["_heatmap_gene_order"] = gene_order
                     st.rerun()
 
-        if st.button("🔥 Generate Heatmap", type="primary",
+        if st.button("Generate Heatmap", type="primary",
                      disabled=len(selected_genes) == 0):
             try:
                 gene_order = st.session_state.get("_heatmap_gene_order", list(selected_genes))
@@ -664,12 +686,12 @@ with tab_go:
                              horizontal=True, key="go_plottype")
 
         # Hex color override
-        go_color_input = st.text_input("Plot color (hex)", value="#4361ee", key="go_color")
-        go_color = go_color_input if re.match(r"^#[0-9a-fA-F]{6}$", go_color_input) else "#4361ee"
+        go_color_input = st.text_input("Plot color (hex)", value="#4C848D", key="go_color")
+        go_color = go_color_input if re.match(r"^#[0-9a-fA-F]{6}$", go_color_input) else "#4C848D"
         if go_color_input != go_color:
-            st.caption("⚠️ Invalid hex, using default #4361ee.")
+            st.caption("Invalid hex, using default #4C848D.")
 
-        if st.button("🧬 Run GO Enrichment", type="primary", key="go_run"):
+        if st.button("Run GO Enrichment", type="primary", key="go_run"):
             # Parse chosen comparison
             g1, g2 = chosen_comp.split(" vs ", 1)
             dge_df = st.session_state.dge_results.get((g1, g2))
@@ -715,7 +737,7 @@ with tab_go:
                         export_buttons(fig, f"GO_{g1}_vs_{g2}_{library_label.replace(' ','_')}")
 
                         st.download_button(
-                            "⬇ Download GO results CSV",
+                            "Download GO results CSV",
                             data=results_df.to_csv(index=False).encode(),
                             file_name=f"GO_{g1}_vs_{g2}_{library_label.replace(' ','_')}.csv",
                             mime="text/csv",

@@ -119,7 +119,7 @@ def run_enrichment(
 def plot_go_bars(
     res: pd.DataFrame,
     title: str = "GO Enrichment",
-    color: str = "#4361ee",
+    color: str = "#4C848D",
     width: int = 800,
     height: int = 600,
 ) -> go.Figure:
@@ -185,7 +185,7 @@ def plot_go_bars(
 def plot_go_dots(
     res: pd.DataFrame,
     title: str = "GO Enrichment",
-    color: str = "#4361ee",
+    color: str = "#4C848D",
     width: int = 800,
     height: int = 600,
 ) -> go.Figure:

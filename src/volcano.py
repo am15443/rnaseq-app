@@ -22,8 +22,8 @@ def plot_volcano(
     group2: str,
     fc_thresh: float = 1.0,
     neg_log10_padj_thresh: float = 1.301,   # ≈ padj < 0.05
-    color_up: str = "#4361ee",
-    color_down: str = "#f72585",
+    color_up: str = "#4C848D",
+    color_down: str = "#C35627",
 ) -> go.Figure:
     """
     Parameters

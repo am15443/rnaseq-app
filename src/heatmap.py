@@ -102,7 +102,7 @@ def build_heatmap(
             y=matched,
             text=hover,
             hoverinfo="text",
-            colorscale=[[0, "#d63027"], [0.5, "#f7f7f7"], [1, "#1b984e"]],
+            colorscale=[[0, "#C35627"], [0.5, "#f7f7f7"], [1, "#30525C"]],
             zmid=0,
             colorbar=dict(
                 title=dict(text="Z-score<br>(log₂ TPM)", side="right"),
@@ -223,7 +223,7 @@ def build_heatmap(
     if missing:
         shown = ", ".join(missing[:8]) + ("…" if len(missing) > 8 else "")
         fig.add_annotation(
-            text=f"⚠️ {len(missing)} gene(s) not found in TPM matrix: {shown}",
+            text=f"{len(missing)} gene(s) not found in TPM matrix: {shown}",
             xref="paper", yref="paper",
             x=0, y=-0.03,
             showarrow=False,

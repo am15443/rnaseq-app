@@ -117,7 +117,7 @@ def validate_counts(
     available = [s for s in sample_order if s in counts_df.columns]
     missing   = [s for s in sample_order if s not in counts_df.columns]
     if missing:
-        st.warning(f"⚠️ These srr_ids were not found in the TSV: {missing}")
+        st.warning(f"These srr_ids were not found in the TSV: {missing}")
 
     counts_df = counts_df[available]
     tpm_df    = tpm_df[available]
